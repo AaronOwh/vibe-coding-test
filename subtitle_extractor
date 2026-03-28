@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+字幕提取器
+从SRT字幕文件中提取字幕文本，去掉时间戳和序号，按段落排列。
+支持命令行和GUI界面。
+"""
+
+import sys
+import re
+import tkinter as tk
+from tkinter import filedialog, messagebox, scrolledtext
+
+def extract_subtitles(srt_file_path):
+    """
+    从SRT文件中提取字幕文本。
+    
+    :param srt_file_path: SRT文件路径
+    :return: 提取的字幕文本列表
+    """
+    try:
+        with open(srt_file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+    except UnicodeDecodeError:
+        # 尝试其他编码
+        with open(srt_file_path, 'r', encoding='gbk') as file:
+            content = file.read()
+    
+    # SRT格式的正则表达式模式
+    # 匹配序号、时间戳和字幕文本
+    pattern = re.compile(r'^\d+\s*$', re.MULTILINE)  # 序号
+    time_pattern = re.compile(r'^\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\s*$', re.MULTILINE)  # 时间戳
+    
+    # 按空行分割块
+    blocks = re.split(r'\n\s*\n', content.strip())
+    
+    subtitles = []
+    for block in blocks:
+        lines = block.strip().split('\n')
+        # 跳过序号和时间戳行
+        text_lines = []
+        for line in lines:
+            if not pattern.match(line) and not time_pattern.match(line):
+                text_lines.append(line.strip())
+        # 合并文本行
+        if text_lines:
+            subtitles.append(' '.join(text_lines))
+    
+    return subtitles
+
+def main_cli():
+    if len(sys.argv) != 2:
+        print("用法: python subtitle_extractor.py <srt_file>")
+        sys.exit(1)
+    
+    srt_file = sys.argv[1]
+    try:
+        subtitles = extract_subtitles(srt_file)
+        print(', '.join(subtitles))
+    except FileNotFoundError:
+        print(f"文件 '{srt_file}' 未找到。")
+    except Exception as e:
+        print(f"发生错误: {e}")
+
+class SubtitleExtractorGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("字幕提取器")
+        self.root.geometry("600x400")
+        
+        # 创建界面元素
+        self.label = tk.Label(root, text="选择SRT字幕文件：")
+        self.label.pack(pady=10)
+        
+        self.select_button = tk.Button(root, text="选择文件", command=self.select_file)
+        self.select_button.pack(pady=5)
+        
+        self.file_label = tk.Label(root, text="未选择文件")
+        self.file_label.pack(pady=5)
+        
+        self.extract_button = tk.Button(root, text="提取字幕", command=self.extract_subtitles, state=tk.DISABLED)
+        self.extract_button.pack(pady=10)
+        
+        self.text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, height=15)
+        self.text_area.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+        
+        self.file_path = None
+    
+    def select_file(self):
+        file_path = filedialog.askopenfilename(
+            title="选择SRT文件",
+            filetypes=[("SRT文件", "*.srt"), ("所有文件", "*.*")]
+        )
+        if file_path:
+            self.file_path = file_path
+            self.file_label.config(text=f"已选择: {file_path}")
+            self.extract_button.config(state=tk.NORMAL)
+    
+    def extract_subtitles(self):
+        if not self.file_path:
+            messagebox.showerror("错误", "请先选择文件")
+            return
+        
+        try:
+            subtitles = extract_subtitles(self.file_path)
+            self.text_area.delete(1.0, tk.END)
+            self.text_area.insert(tk.END, ', '.join(subtitles))
+        except Exception as e:
+            messagebox.showerror("错误", f"处理文件时发生错误: {e}")
+
+def main_gui():
+    root = tk.Tk()
+    app = SubtitleExtractorGUI(root)
+    root.mainloop()
+
+def main():
+    if len(sys.argv) > 1:
+        # 如果有命令行参数，使用CLI模式
+        main_cli()
+    else:
+        # 否则启动GUI
+        main_gui()
+
+if __name__ == "__main__":
+    main()
